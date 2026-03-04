@@ -392,10 +392,6 @@ function findDuplicates(records) {
                 if (dayDiff <= toleranceDays) {
                     currentGroup.push(compareItem);
                     visited.add(j);
-                } else {
-                    // Since sorted by date, if it exceeds tolerance, break early
-                    // BUT wait, a chain A -> B -> C could extend the tolerance. 
-                    // To keep it simple, we compare strictly against the base item of the sub-group.
                 }
             }
 
