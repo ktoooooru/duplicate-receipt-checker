@@ -197,26 +197,49 @@ function analyzeData(rows) {
             // Temporary map for this row to see if it's a valid header
             let tempMap = { date: -1, amount: -1, amountL: -1, amountR: -1, desc: -1, debit: -1, credit: -1 };
 
+            // Search for multiple '金額' columns (MJS specifically uses two '金額' columns for debit and credit)
+            let amountIndices = [];
+            row.forEach((cell, idx) => {
+                if (String(cell).trim() === '金額') amountIndices.push(idx);
+            });
+
+            if (amountIndices.length === 2) {
+                tempMap.amountL = amountIndices[0];
+                tempMap.amountR = amountIndices[1];
+            } else if (amountIndices.length === 1) {
+                tempMap.amount = amountIndices[0];
+            }
+
             row.forEach((cell, idx) => {
                 if (!cell) return;
                 const text = String(cell).trim();
 
-                if (text.includes('日付') || text.includes('処理日') || text.includes('発生日') || text.includes('取引日') || text.includes('伝票日付')) {
+                // Exactly match standard fields
+                if (text === '日付' || text === '伝票日付' || text === '処理日' || text === '発生日' || text === '取引日') {
                     if (tempMap.date === -1) tempMap.date = idx;
                 }
-                else if (text.includes('借方金額') || text.includes('金額（借）') || text.includes('借方')) tempMap.amountL = idx;
-                else if (text.includes('貸方金額') || text.includes('金額（貸）') || text.includes('貸方')) tempMap.amountR = idx;
-                else if (text.includes('借方科目') || text.includes('科目（借）') || text.includes('借方勘定')) tempMap.debit = idx;
-                else if (text.includes('貸方科目') || text.includes('科目（貸）') || text.includes('貸方勘定') || text.includes('相手科目')) tempMap.credit = idx;
-                else if (text.includes('金額') || text.includes('合計') || text.includes('取引金額')) {
-                    if (tempMap.amount === -1) tempMap.amount = idx;
+
+                // Account Match
+                if (text === '借方科目名' || text === '借方科目' || text === '科目（借）' || text === '借方勘定') {
+                    tempMap.debit = idx;
+                } else if (text === '貸方科目名' || text === '貸方科目' || text === '科目（貸）' || text === '貸方勘定' || text === '相手科目') {
+                    tempMap.credit = idx;
+                } else if (tempMap.debit === -1 && (text === '科目' || text === '勘定科目')) {
+                    tempMap.debit = idx;
                 }
-                else if (text.includes('摘要') || text.includes('内容') || text.includes('取引先') || text.includes('備考')) {
+
+                // Description Match
+                if (text === '摘要' || text === '内容' || text === '取引先' || text === '備考') {
                     if (tempMap.desc === -1) tempMap.desc = idx;
                 }
-                else if (text.includes('科目') || text.includes('勘定科目')) {
-                    // Fallback if no specific L/R account
-                    if (tempMap.debit === -1) tempMap.debit = idx;
+
+                // Amount fallbacks (if not found primarily by exactly '金額')
+                if (amountIndices.length === 0) {
+                    if (text === '借方金額' || text === '金額（借）') tempMap.amountL = idx;
+                    else if (text === '貸方金額' || text === '金額（貸）') tempMap.amountR = idx;
+                    else if (text === '合計' || text === '取引金額') {
+                        if (tempMap.amount === -1) tempMap.amount = idx;
+                    }
                 }
             });
 
@@ -224,11 +247,6 @@ function analyzeData(rows) {
             if (tempMap.date !== -1 && (tempMap.amount !== -1 || tempMap.amountL !== -1 || tempMap.amountR !== -1)) {
                 headerRowIdx = i;
                 colMap = tempMap;
-
-                // Prioritize L/R amounts over generic amount if both were somehow found
-                if (colMap.amountL !== -1 || colMap.amountR !== -1) {
-                    colMap.amount = -1;
-                }
                 break;
             }
         }
